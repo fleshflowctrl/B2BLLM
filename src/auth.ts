@@ -7,7 +7,10 @@ import { writeAuditLog } from "@/services/audit";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  secret: process.env.AUTH_SECRET,
+  secret:
+    process.env.AUTH_SECRET ??
+    process.env.AUTH_SECRET ??
+    "temporary-dev-secret-change-me-at-least-32-chars",
   providers: [
     Credentials({
       name: "Email and password",
