@@ -122,3 +122,14 @@ ALTER TABLE "Conversation" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Message" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "AiSettings" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "AuditLog" DISABLE ROW LEVEL SECURITY;
+
+CREATE POLICY allow_all ON "Company" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "User" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "Department" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "UserDepartment" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "Document" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "DocumentDepartment" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "Conversation" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "Message" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "AiSettings" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY allow_all ON "AuditLog" FOR ALL USING (true) WITH CHECK (true);
