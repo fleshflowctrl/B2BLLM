@@ -20,6 +20,8 @@ const envSchema = z.object({
     .enum(["true", "false", "1", "0"])
     .optional()
     .default("true"),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -42,6 +44,8 @@ export function getEnv(): AppEnv {
     STORAGE_PATH: process.env.STORAGE_PATH,
     MAX_UPLOAD_BYTES: process.env.MAX_UPLOAD_BYTES,
     AUTH_DISABLED: process.env.AUTH_DISABLED as "true" | "false" | "1" | "0" | undefined,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   });
   return cached;
 }

@@ -1,5 +1,7 @@
 import NextAuth from "next-auth";
+import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
+import { createClient } from "@/utils/supabase/middleware";
 
 const { auth } = NextAuth(authConfig);
 
@@ -8,7 +10,23 @@ function isAuthDisabled() {
   return value !== "false" && value !== "0";
 }
 
-export default auth((req) => {
+export default auth(async (req) => {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    const { supabase, supabaseResponse } = createClient(req);
+    await supabase.auth.getUser();
+
+    if (isAuthDisabled()) {
+      if (req.nextUrl.pathname.startsWith("/login")) {
+        const redirect = NextResponse.redirect(new URL("/", req.nextUrl));
+        supabaseResponse.cookies.getAll().forEach((cookie) => {
+          redirect.cookies.set(cookie.name, cookie.value);
+        });
+        return redirect;
+      }
+      return supabaseResponse;
+    }
+  }
+
   if (isAuthDisabled()) {
     if (req.nextUrl.pathname.startsWith("/login")) {
       return Response.redirect(new URL("/", req.nextUrl));

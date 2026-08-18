@@ -55,7 +55,8 @@ The web app is published on port 3000. Postgres, Qdrant, and Ollama bind to loca
 
 See `.env.example`. Important variables:
 
-- `DATABASE_URL`
+- `DATABASE_URL` (for Vercel: the Postgres URI from Supabase → Settings → Database)
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `AUTH_SECRET`
 - `OLLAMA_BASE_URL` / `OLLAMA_MODEL`
 - `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS`
