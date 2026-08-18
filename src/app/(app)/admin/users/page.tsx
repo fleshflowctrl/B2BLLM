@@ -1,19 +1,12 @@
 import { UsersClient } from "@/components/admin/users-client";
-import { prisma } from "@/lib/prisma";
+import { attachUsers, listDepartments, listUsers } from "@/lib/db";
 import { requireAdminPage } from "@/services/auth/session";
 
 export default async function UsersPage() {
   const admin = await requireAdminPage();
   const [users, departments] = await Promise.all([
-    prisma.user.findMany({
-      where: { companyId: admin.companyId },
-      include: { departments: { include: { department: true } } },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.department.findMany({
-      where: { companyId: admin.companyId },
-      orderBy: { name: "asc" },
-    }),
+    listUsers(admin.companyId).then(attachUsers),
+    listDepartments(admin.companyId),
   ]);
 
   return (
@@ -26,10 +19,10 @@ export default async function UsersPage() {
         email: user.email,
         role: user.role,
         status: user.status,
-        departments: user.departments.map((row) => ({
-          id: row.department.id,
-          name: row.department.name,
-        })),
+        departments: user.departments
+          .map((row) => row.department)
+          .filter(Boolean)
+          .map((department) => ({ id: department!.id, name: department!.name })),
       }))}
     />
   );

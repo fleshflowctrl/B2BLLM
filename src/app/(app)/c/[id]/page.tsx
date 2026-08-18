@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { ChatPanel, type ChatMessage } from "@/components/chat/chat-panel";
-import { prisma } from "@/lib/prisma";
+import { getConversation } from "@/lib/db";
 import { requireUserPage } from "@/services/auth/session";
 
 export default async function ConversationPage({
@@ -10,10 +10,7 @@ export default async function ConversationPage({
 }) {
   const user = await requireUserPage();
   const { id } = await params;
-  const conversation = await prisma.conversation.findFirst({
-    where: { id, companyId: user.companyId, userId: user.id },
-    include: { messages: { orderBy: { createdAt: "asc" } } },
-  });
+  const conversation = await getConversation(id, user.companyId, user.id);
   if (!conversation) notFound();
 
   const initialMessages: ChatMessage[] = conversation.messages.map((message) => ({

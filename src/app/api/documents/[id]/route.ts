@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
 import { jsonError, getRequestIp } from "@/lib/api";
 import { badRequest, notFound } from "@/lib/errors";
-import { prisma } from "@/lib/prisma";
+import {
+  countDepartments,
+  deleteDocument,
+  getDocument,
+  setDocumentDepartments,
+  updateDocument,
+} from "@/lib/db";
 import { writeAuditLog } from "@/services/audit";
 import { requireAdmin, requireUser } from "@/services/auth/session";
 import { canAccessDocument } from "@/services/permissions/access";
 import { getDocumentStorage } from "@/services/storage/local";
 import { getVectorStore } from "@/services/vector/qdrant";
-
-async function loadDocument(id: string, companyId: string) {
-  return prisma.document.findFirst({
-    where: { id, companyId },
-    include: {
-      uploadedBy: { select: { id: true, name: true, email: true } },
-      departments: { include: { department: true } },
-    },
-  });
-}
 
 export async function GET(
   _request: Request,
@@ -25,7 +21,7 @@ export async function GET(
   try {
     const user = await requireUser();
     const { id } = await context.params;
-    const document = await loadDocument(id, user.companyId);
+    const document = await getDocument(id, user.companyId);
     if (!document) throw notFound("Document not found");
     if (
       !canAccessDocument(user, {
@@ -49,7 +45,7 @@ export async function PATCH(
   try {
     const user = await requireAdmin();
     const { id } = await context.params;
-    const document = await loadDocument(id, user.companyId);
+    const document = await getDocument(id, user.companyId);
     if (!document) throw notFound("Document not found");
     const body = (await request.json()) as {
       visibility?: "ALL_EMPLOYEES" | "DEPARTMENTS";
@@ -61,34 +57,18 @@ export async function PATCH(
       throw badRequest("Select at least one department");
     }
     if (departmentIds.length > 0) {
-      const count = await prisma.department.count({
-        where: { companyId: user.companyId, id: { in: departmentIds } },
-      });
+      const count = await countDepartments(user.companyId, departmentIds);
       if (count !== departmentIds.length) throw badRequest("Invalid department selection");
     }
-
-    await prisma.$transaction([
-      prisma.documentDepartment.deleteMany({ where: { documentId: id } }),
-      prisma.document.update({
-        where: { id },
-        data: {
-          visibility,
-          departments:
-            visibility === "DEPARTMENTS"
-              ? { create: departmentIds.map((departmentId) => ({ departmentId })) }
-              : undefined,
-        },
-      }),
-    ]);
-
+    await setDocumentDepartments(id, visibility === "DEPARTMENTS" ? departmentIds : []);
+    await updateDocument(id, { visibility });
     await getVectorStore().updateAccess({
       companyId: user.companyId,
       documentId: id,
       departmentIds: visibility === "DEPARTMENTS" ? departmentIds : [],
       allEmployees: visibility === "ALL_EMPLOYEES",
     });
-
-    const updated = await loadDocument(id, user.companyId);
+    const updated = await getDocument(id, user.companyId);
     return NextResponse.json({ document: updated });
   } catch (error) {
     return jsonError(error);
@@ -102,16 +82,11 @@ export async function DELETE(
   try {
     const user = await requireAdmin();
     const { id } = await context.params;
-    const document = await prisma.document.findFirst({
-      where: { id, companyId: user.companyId },
-    });
+    const document = await getDocument(id, user.companyId);
     if (!document) throw notFound("Document not found");
-    await getVectorStore().deleteByDocument({
-      companyId: user.companyId,
-      documentId: id,
-    });
+    await getVectorStore().deleteByDocument({ companyId: user.companyId, documentId: id });
     await getDocumentStorage().delete(document.storagePath);
-    await prisma.document.delete({ where: { id } });
+    await deleteDocument(id);
     await writeAuditLog({
       companyId: user.companyId,
       userId: user.id,

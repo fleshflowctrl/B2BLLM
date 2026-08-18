@@ -1,43 +1,40 @@
 import { DocumentsClient } from "@/components/documents/documents-client";
-import { prisma } from "@/lib/prisma";
+import { listDepartments, listDocuments } from "@/lib/db";
 import { requireUserPage } from "@/services/auth/session";
-import { documentListWhere } from "@/services/permissions/access";
+import { canAccessDocument } from "@/services/permissions/access";
 import { isAdmin } from "@/types/auth";
 
 export default async function DocumentsPage() {
   const user = await requireUserPage();
   const [documents, departments] = await Promise.all([
-    prisma.document.findMany({
-      where: documentListWhere(user),
-      include: {
-        uploadedBy: { select: { name: true, email: true } },
-        departments: { include: { department: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.department.findMany({
-      where: { companyId: user.companyId },
-      orderBy: { name: "asc" },
-    }),
+    listDocuments(user.companyId),
+    listDepartments(user.companyId),
   ]);
+  const visible = documents.filter((document) =>
+    canAccessDocument(user, {
+      companyId: document.companyId,
+      visibility: document.visibility,
+      departmentIds: document.departments.map((row) => row.departmentId),
+    }),
+  );
 
   return (
     <DocumentsClient
       isAdmin={isAdmin(user)}
       departments={departments}
-      documents={documents.map((document) => ({
+      documents={visible.map((document) => ({
         id: document.id,
         originalFilename: document.originalFilename,
         status: document.status,
         visibility: document.visibility,
         fileSize: document.fileSize,
-        createdAt: document.createdAt.toISOString(),
+        createdAt: document.createdAt,
         uploadedByName: document.uploadedBy.name,
         errorMessage: document.errorMessage,
-        departments: document.departments.map((row) => ({
-          id: row.department.id,
-          name: row.department.name,
-        })),
+        departments: document.departments
+          .map((row) => row.department)
+          .filter(Boolean)
+          .map((department) => ({ id: department!.id, name: department!.name })),
       }))}
     />
   );

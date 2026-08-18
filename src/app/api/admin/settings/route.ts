@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError } from "@/lib/api";
 import { badRequest } from "@/lib/errors";
+import { updateAiSettings } from "@/lib/db";
 import { requireAdmin } from "@/services/auth/session";
 import { getAiSettings } from "@/services/settings";
-import { prisma } from "@/lib/prisma";
 
 const patchSchema = z.object({
   chatModel: z.string().min(1).max(120).optional(),
@@ -30,10 +30,7 @@ export async function PATCH(request: Request) {
     const parsed = patchSchema.safeParse(await request.json());
     if (!parsed.success) throw badRequest("Invalid settings");
     const current = await getAiSettings(admin.companyId);
-    const settings = await prisma.aiSettings.update({
-      where: { id: current.id },
-      data: parsed.data,
-    });
+    const settings = await updateAiSettings(current.id, parsed.data);
     return NextResponse.json({ settings });
   } catch (error) {
     return jsonError(error);

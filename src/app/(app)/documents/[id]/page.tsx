@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getDocument } from "@/lib/db";
 import { formatBytes, formatDate } from "@/lib/format";
 import { requireUserPage } from "@/services/auth/session";
 import { canAccessDocument } from "@/services/permissions/access";
@@ -11,13 +11,7 @@ export default async function DocumentDetailPage({
 }) {
   const user = await requireUserPage();
   const { id } = await params;
-  const document = await prisma.document.findFirst({
-    where: { id, companyId: user.companyId },
-    include: {
-      uploadedBy: true,
-      departments: { include: { department: true } },
-    },
-  });
+  const document = await getDocument(id, user.companyId);
   if (
     !document ||
     !canAccessDocument(user, {
@@ -36,14 +30,12 @@ export default async function DocumentDetailPage({
         {document.status} · {formatBytes(document.fileSize)} · {formatDate(document.createdAt)} ·{" "}
         {document.uploadedBy.name}
       </p>
-      {document.errorMessage ? (
-        <p className="mt-3 text-sm text-red-600">{document.errorMessage}</p>
-      ) : null}
+      {document.errorMessage ? <p className="mt-3 text-sm text-red-600">{document.errorMessage}</p> : null}
       <p className="mt-3 text-sm text-zinc-600">
         Access:{" "}
         {document.visibility === "ALL_EMPLOYEES"
           ? "All employees"
-          : document.departments.map((row) => row.department.name).join(", ")}
+          : document.departments.map((row) => row.department?.name).filter(Boolean).join(", ")}
       </p>
       <iframe
         className="mt-6 h-[70vh] w-full rounded-xl border border-zinc-200 bg-white"

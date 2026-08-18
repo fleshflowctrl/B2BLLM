@@ -1,4 +1,5 @@
-import type { Role, UserStatus } from "@/generated/prisma/client";
+export type Role = "ADMIN" | "EMPLOYEE";
+export type UserStatus = "ACTIVE" | "DEACTIVATED";
 
 export type AccessContext = {
   id: string;

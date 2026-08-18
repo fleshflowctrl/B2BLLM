@@ -1,4 +1,3 @@
-import type { Prisma } from "@/generated/prisma/client";
 import type { AccessContext } from "@/types/auth";
 import { isAdmin } from "@/types/auth";
 
@@ -41,21 +40,11 @@ export function isChunkVisible(
   return payload.departmentIds.some((id) => allowed.has(id));
 }
 
-export function documentListWhere(user: AccessContext): Prisma.DocumentWhereInput {
-  if (isAdmin(user)) {
-    return { companyId: user.companyId };
-  }
-  return {
-    companyId: user.companyId,
-    OR: [
-      { visibility: "ALL_EMPLOYEES" },
-      {
-        departments: {
-          some: { departmentId: { in: user.departmentIds } },
-        },
-      },
-    ],
-  };
+export function isDocumentListed(
+  user: AccessContext,
+  document: { companyId: string; visibility: "ALL_EMPLOYEES" | "DEPARTMENTS"; departmentIds: string[] },
+) {
+  return canAccessDocument(user, document);
 }
 
 export function canAccessDocument(

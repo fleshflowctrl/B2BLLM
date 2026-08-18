@@ -2,9 +2,15 @@ import { after } from "next/server";
 import { z } from "zod";
 import { jsonError, getRequestIp } from "@/lib/api";
 import { CHAT_RATE_LIMIT, UNKNOWN_ANSWER } from "@/lib/constants";
+import {
+  createConversation,
+  createMessage,
+  deleteMessage,
+  getConversation,
+  updateConversation,
+} from "@/lib/db";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
 import { conversationTitleFromMessage } from "@/lib/format";
-import { prisma } from "@/lib/prisma";
 import { getRateLimiter } from "@/lib/rate-limit";
 import { embedQuery, streamChat } from "@/services/ai/ollama";
 import { writeAuditLog } from "@/services/audit";
@@ -42,49 +48,33 @@ export async function POST(request: Request) {
 
     if (parsed.data.regenerate) {
       if (!conversationId) throw badRequest("conversationId is required to regenerate");
-      const conversation = await prisma.conversation.findFirst({
-        where: { id: conversationId, companyId: user.companyId, userId: user.id },
-        include: { messages: { orderBy: { createdAt: "desc" }, take: 4 } },
-      });
+      const conversation = await getConversation(conversationId, user.companyId, user.id);
       if (!conversation) throw notFound("Conversation not found");
-      const lastAssistant = conversation.messages.find((item) => item.role === "ASSISTANT");
-      const lastUser = conversation.messages.find((item) => item.role === "USER");
+      const lastAssistant = [...conversation.messages].reverse().find((item) => item.role === "ASSISTANT");
+      const lastUser = [...conversation.messages].reverse().find((item) => item.role === "USER");
       if (!lastUser) throw badRequest("Nothing to regenerate");
-      if (lastAssistant) {
-        await prisma.message.delete({ where: { id: lastAssistant.id } });
-      }
+      if (lastAssistant) await deleteMessage(lastAssistant.id);
       question = lastUser.content;
     } else {
       if (!question) throw badRequest("Message is required");
       if (!conversationId) {
-        const conversation = await prisma.conversation.create({
-          data: {
-            companyId: user.companyId,
-            userId: user.id,
-            title: conversationTitleFromMessage(question),
-          },
+        const conversation = await createConversation({
+          companyId: user.companyId,
+          userId: user.id,
+          title: conversationTitleFromMessage(question),
         });
         conversationId = conversation.id;
       } else {
-        const conversation = await prisma.conversation.findFirst({
-          where: { id: conversationId, companyId: user.companyId, userId: user.id },
-        });
+        const conversation = await getConversation(conversationId, user.companyId, user.id);
         if (!conversation) throw notFound("Conversation not found");
         if (conversation.title === "New conversation") {
-          await prisma.conversation.update({
-            where: { id: conversationId },
-            data: { title: conversationTitleFromMessage(question) },
-          });
+          await updateConversation(conversationId, { title: conversationTitleFromMessage(question) });
         }
       }
-      await prisma.message.create({
-        data: { conversationId, role: "USER", content: question },
-      });
+      await createMessage({ conversationId, role: "USER", content: question });
     }
 
-    const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, companyId: user.companyId, userId: user.id },
-    });
+    const conversation = await getConversation(conversationId, user.companyId, user.id);
     if (!conversation) throw forbidden();
 
     const settings = await getAiSettings(user.companyId);
@@ -96,24 +86,13 @@ export async function POST(request: Request) {
       topK: settings.topK,
     });
     const citations = toCitations(hits);
-
     const encoder = new TextEncoder();
     const send = (payload: unknown) => encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
 
     if (hits.length === 0) {
       const answer = unknownAnswer();
-      await prisma.message.create({
-        data: {
-          conversationId,
-          role: "ASSISTANT",
-          content: answer,
-          citations,
-        },
-      });
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() },
-      });
+      await createMessage({ conversationId, role: "ASSISTANT", content: answer, citations });
+      await updateConversation(conversationId, {});
       after(() =>
         writeAuditLog({
           companyId: user.companyId,
@@ -156,18 +135,8 @@ export async function POST(request: Request) {
             controller.enqueue(send({ type: "token", text: token }));
           }
           if (!answer.trim()) answer = UNKNOWN_ANSWER;
-          await prisma.message.create({
-            data: {
-              conversationId,
-              role: "ASSISTANT",
-              content: answer,
-              citations,
-            },
-          });
-          await prisma.conversation.update({
-            where: { id: conversationId },
-            data: { updatedAt: new Date() },
-          });
+          await createMessage({ conversationId, role: "ASSISTANT", content: answer, citations });
+          await updateConversation(conversationId, {});
           await writeAuditLog({
             companyId: user.companyId,
             userId: user.id,

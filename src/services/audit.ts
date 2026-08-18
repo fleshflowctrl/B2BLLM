@@ -1,20 +1,11 @@
-import { prisma } from "@/lib/prisma";
-import type { AuditEvent, Prisma } from "@/generated/prisma/client";
+import { createAuditLog, type AuditEvent } from "@/lib/db";
 
 export async function writeAuditLog(input: {
   companyId: string;
   userId?: string | null;
   event: AuditEvent;
-  metadata?: Prisma.InputJsonValue;
+  metadata?: unknown;
   ipAddress?: string | null;
 }) {
-  await prisma.auditLog.create({
-    data: {
-      companyId: input.companyId,
-      userId: input.userId ?? null,
-      event: input.event,
-      metadata: input.metadata ?? undefined,
-      ipAddress: input.ipAddress ?? null,
-    },
-  });
+  await createAuditLog(input);
 }

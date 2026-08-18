@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError } from "@/lib/api";
 import { badRequest, notFound } from "@/lib/errors";
-import { prisma } from "@/lib/prisma";
+import { deleteDepartment, getDepartment, updateDepartment } from "@/lib/db";
 import { requireAdmin } from "@/services/auth/session";
 
 export async function PATCH(
@@ -12,16 +12,11 @@ export async function PATCH(
   try {
     const admin = await requireAdmin();
     const { id } = await context.params;
-    const department = await prisma.department.findFirst({
-      where: { id, companyId: admin.companyId },
-    });
+    const department = await getDepartment(id, admin.companyId);
     if (!department) throw notFound("Department not found");
     const parsed = z.object({ name: z.string().min(1).max(80) }).safeParse(await request.json());
     if (!parsed.success) throw badRequest("Department name is required");
-    const updated = await prisma.department.update({
-      where: { id },
-      data: { name: parsed.data.name.trim() },
-    });
+    const updated = await updateDepartment(id, parsed.data.name.trim());
     return NextResponse.json({ department: updated });
   } catch (error) {
     return jsonError(error);
@@ -35,11 +30,9 @@ export async function DELETE(
   try {
     const admin = await requireAdmin();
     const { id } = await context.params;
-    const department = await prisma.department.findFirst({
-      where: { id, companyId: admin.companyId },
-    });
+    const department = await getDepartment(id, admin.companyId);
     if (!department) throw notFound("Department not found");
-    await prisma.department.delete({ where: { id } });
+    await deleteDepartment(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return jsonError(error);

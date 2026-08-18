@@ -7,7 +7,7 @@ Self-hosted company knowledge assistant. Employees ask questions against interna
 ## Stack
 
 - Next.js App Router, TypeScript, Tailwind, shadcn/ui
-- PostgreSQL + Prisma
+- Supabase (Postgres via the Supabase API)
 - Qdrant
 - Ollama (chat + embeddings)
 - Local disk storage for originals
@@ -16,9 +16,8 @@ Self-hosted company knowledge assistant. Employees ask questions against interna
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres qdrant ollama
-npx prisma generate
-npx prisma migrate dev --name init
+docker compose up -d qdrant ollama
+# In Supabase → SQL Editor, run supabase/schema.sql
 npm run db:seed
 npm run dev
 ```
@@ -46,7 +45,7 @@ Then retry processing on `/documents` so embeddings can be generated.
 
 ```bash
 docker compose up -d --build
-docker compose exec app npx prisma db seed
+docker compose exec app npm run db:seed
 ```
 
 The web app is published on port 3000. Postgres, Qdrant, and Ollama bind to localhost only.
@@ -55,7 +54,6 @@ The web app is published on port 3000. Postgres, Qdrant, and Ollama bind to loca
 
 See `.env.example`. Important variables:
 
-- `DATABASE_URL` (for Vercel: the Postgres URI from Supabase → Settings → Database)
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `AUTH_SECRET`
 - `OLLAMA_BASE_URL` / `OLLAMA_MODEL`

@@ -5,26 +5,25 @@ import { jsonError, getRequestIp } from "@/lib/api";
 import { UPLOAD_RATE_LIMIT } from "@/lib/constants";
 import { badRequest, forbidden } from "@/lib/errors";
 import { assertAllowedUpload } from "@/lib/files";
-import { prisma } from "@/lib/prisma";
+import { countDepartments, createDocument, listDocuments, setDocumentDepartments, updateDocument } from "@/lib/db";
 import { getRateLimiter } from "@/lib/rate-limit";
 import { writeAuditLog } from "@/services/audit";
 import { requireAdmin, requireUser } from "@/services/auth/session";
 import { enqueueDocumentIngest } from "@/services/documents/ingest";
-import { documentListWhere } from "@/services/permissions/access";
+import { canAccessDocument } from "@/services/permissions/access";
 import { getDocumentStorage } from "@/services/storage/local";
 import { isAdmin } from "@/types/auth";
 
 export async function GET() {
   try {
     const user = await requireUser();
-    const documents = await prisma.document.findMany({
-      where: documentListWhere(user),
-      include: {
-        uploadedBy: { select: { id: true, name: true, email: true } },
-        departments: { include: { department: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const documents = (await listDocuments(user.companyId)).filter((document) =>
+      canAccessDocument(user, {
+        companyId: document.companyId,
+        visibility: document.visibility,
+        departmentIds: document.departments.map((row) => row.departmentId),
+      }),
+    );
     return NextResponse.json({ documents });
   } catch (error) {
     return jsonError(error);
@@ -47,10 +46,7 @@ export async function POST(request: Request) {
     const file = form.get("file");
     if (!(file instanceof File)) throw badRequest("File is required");
     const visibility = String(form.get("visibility") ?? "DEPARTMENTS");
-    const departmentIds = form
-      .getAll("departmentIds")
-      .map(String)
-      .filter(Boolean);
+    const departmentIds = form.getAll("departmentIds").map(String).filter(Boolean);
 
     if (visibility !== "ALL_EMPLOYEES" && visibility !== "DEPARTMENTS") {
       throw badRequest("Invalid visibility");
@@ -65,30 +61,25 @@ export async function POST(request: Request) {
     const checksum = createHash("sha256").update(bytes).digest("hex");
 
     if (departmentIds.length > 0) {
-      const count = await prisma.department.count({
-        where: { companyId: user.companyId, id: { in: departmentIds } },
-      });
+      const count = await countDepartments(user.companyId, departmentIds);
       if (count !== departmentIds.length) throw badRequest("Invalid department selection");
     }
 
-    const document = await prisma.document.create({
-      data: {
-        companyId: user.companyId,
-        uploadedById: user.id,
-        filename: file.name,
-        originalFilename: file.name,
-        mimeType: file.type || "application/octet-stream",
-        fileSize: bytes.length,
-        checksum,
-        storagePath: "pending",
-        status: "UPLOADED",
-        visibility,
-        departments:
-          visibility === "DEPARTMENTS"
-            ? { create: departmentIds.map((departmentId) => ({ departmentId })) }
-            : undefined,
-      },
+    const document = await createDocument({
+      companyId: user.companyId,
+      uploadedById: user.id,
+      filename: file.name,
+      originalFilename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      fileSize: bytes.length,
+      checksum,
+      storagePath: "pending",
+      status: "UPLOADED",
+      visibility: visibility as "ALL_EMPLOYEES" | "DEPARTMENTS",
     });
+    if (visibility === "DEPARTMENTS") {
+      await setDocumentDepartments(document.id, departmentIds);
+    }
 
     const stored = await getDocumentStorage().put({
       companyId: user.companyId,
@@ -96,11 +87,7 @@ export async function POST(request: Request) {
       filename: file.name,
       bytes,
     });
-    await prisma.document.update({
-      where: { id: document.id },
-      data: { storagePath: stored.storagePath },
-    });
-
+    await updateDocument(document.id, { storagePath: stored.storagePath });
     after(() => enqueueDocumentIngest(document.id));
     await writeAuditLog({
       companyId: user.companyId,
@@ -109,7 +96,6 @@ export async function POST(request: Request) {
       metadata: { documentId: document.id, filename: file.name },
       ipAddress: getRequestIp(request),
     });
-
     return NextResponse.json({ document }, { status: 201 });
   } catch (error) {
     return jsonError(error);

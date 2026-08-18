@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getDocument, updateDocument } from "@/lib/db";
 import { embedTexts } from "@/services/ai/ollama";
 import { chunkPages } from "@/services/documents/chunk";
 import { extractDocument } from "@/services/documents/extract";
@@ -8,16 +8,10 @@ import { getDocumentStorage } from "@/services/storage/local";
 import { getVectorStore } from "@/services/vector/qdrant";
 
 async function ingestDocument(documentId: string) {
-  const document = await prisma.document.findUnique({
-    where: { id: documentId },
-    include: { departments: true },
-  });
+  const document = await getDocument(documentId);
   if (!document) return;
 
-  await prisma.document.update({
-    where: { id: documentId },
-    data: { status: "PROCESSING", errorMessage: null },
-  });
+  await updateDocument(documentId, { status: "PROCESSING", errorMessage: null });
 
   try {
     const storage = getDocumentStorage();
@@ -60,24 +54,18 @@ async function ingestDocument(documentId: string) {
       })),
     );
 
-    await prisma.document.update({
-      where: { id: documentId },
-      data: {
-        status: "READY",
-        pageCount: extracted.pageCount,
-        chunkCount: chunks.length,
-        extractedChars: extracted.text.length,
-        processedAt: new Date(),
-        errorMessage: null,
-      },
+    await updateDocument(documentId, {
+      status: "READY",
+      pageCount: extracted.pageCount,
+      chunkCount: chunks.length,
+      extractedChars: extracted.text.length,
+      processedAt: new Date().toISOString(),
+      errorMessage: null,
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message.slice(0, 2000) : "Ingestion failed";
-    await prisma.document.update({
-      where: { id: documentId },
-      data: { status: "FAILED", errorMessage: message },
-    });
+    await updateDocument(documentId, { status: "FAILED", errorMessage: message });
   }
 }
 

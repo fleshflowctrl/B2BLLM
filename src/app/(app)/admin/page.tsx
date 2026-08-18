@@ -1,16 +1,16 @@
-import { prisma } from "@/lib/prisma";
+import { countRows } from "@/lib/db";
 import { requireAdminPage } from "@/services/auth/session";
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdminPage();
   const companyId = admin.companyId;
   const [documents, users, departments, conversations, processing, failed] = await Promise.all([
-    prisma.document.count({ where: { companyId } }),
-    prisma.user.count({ where: { companyId } }),
-    prisma.department.count({ where: { companyId } }),
-    prisma.conversation.count({ where: { companyId } }),
-    prisma.document.count({ where: { companyId, status: "PROCESSING" } }),
-    prisma.document.count({ where: { companyId, status: "FAILED" } }),
+    countRows("Document", { companyId }),
+    countRows("User", { companyId }),
+    countRows("Department", { companyId }),
+    countRows("Conversation", { companyId }),
+    countRows("Document", { companyId, status: "PROCESSING" }),
+    countRows("Document", { companyId, status: "FAILED" }),
   ]);
 
   const cards = [

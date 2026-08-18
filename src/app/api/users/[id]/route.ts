@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, getRequestIp } from "@/lib/api";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
-import { prisma } from "@/lib/prisma";
+import {
+  attachUsers,
+  countDepartments,
+  findUser,
+  setUserDepartments,
+  updateUser,
+} from "@/lib/db";
 import { writeAuditLog } from "@/services/audit";
 import { requireAdmin } from "@/services/auth/session";
 
@@ -20,9 +26,7 @@ export async function PATCH(
   try {
     const admin = await requireAdmin();
     const { id } = await context.params;
-    const user = await prisma.user.findFirst({
-      where: { id, companyId: admin.companyId },
-    });
+    const user = await findUser({ id, companyId: admin.companyId });
     if (!user) throw notFound("User not found");
     const parsed = patchSchema.safeParse(await request.json());
     if (!parsed.success) throw badRequest("Invalid user payload");
@@ -33,24 +37,16 @@ export async function PATCH(
       throw forbidden("You cannot remove your own admin role");
     }
     if (parsed.data.departmentIds) {
-      const count = await prisma.department.count({
-        where: { companyId: admin.companyId, id: { in: parsed.data.departmentIds } },
-      });
+      const count = await countDepartments(admin.companyId, parsed.data.departmentIds);
       if (count !== parsed.data.departmentIds.length) throw badRequest("Invalid departments");
-      await prisma.userDepartment.deleteMany({ where: { userId: id } });
+      await setUserDepartments(id, parsed.data.departmentIds);
     }
-    const updated = await prisma.user.update({
-      where: { id },
-      data: {
-        name: parsed.data.name?.trim(),
-        role: parsed.data.role,
-        status: parsed.data.status,
-        departments: parsed.data.departmentIds
-          ? { create: parsed.data.departmentIds.map((departmentId) => ({ departmentId })) }
-          : undefined,
-      },
-      include: { departments: { include: { department: true } } },
+    const updated = await updateUser(id, {
+      name: parsed.data.name?.trim(),
+      role: parsed.data.role,
+      status: parsed.data.status,
     });
+    const [withDepartments] = await attachUsers([updated]);
     await writeAuditLog({
       companyId: admin.companyId,
       userId: admin.id,
@@ -58,7 +54,7 @@ export async function PATCH(
       metadata: { targetUserId: id, changes: parsed.data },
       ipAddress: getRequestIp(request),
     });
-    const { passwordHash, ...safe } = updated;
+    const { passwordHash, ...safe } = withDepartments;
     void passwordHash;
     return NextResponse.json({ user: safe });
   } catch (error) {

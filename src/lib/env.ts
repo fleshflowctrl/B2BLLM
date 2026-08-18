@@ -2,9 +2,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z
-    .string()
-    .default("postgresql://privateai:privateai@localhost:5432/privateai"),
+  DATABASE_URL: z.string().optional(),
   AUTH_SECRET: z.string().default("dev-only-insecure-secret-change-me-now-32"),
   AUTH_URL: z.string().default("http://localhost:3000"),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),

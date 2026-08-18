@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api";
 import { notFound } from "@/lib/errors";
-import { prisma } from "@/lib/prisma";
+import { getDocument } from "@/lib/db";
 import { requireUser } from "@/services/auth/session";
 import { canAccessDocument } from "@/services/permissions/access";
 import { getDocumentStorage } from "@/services/storage/local";
@@ -12,10 +12,7 @@ export async function GET(
   try {
     const user = await requireUser();
     const { id } = await context.params;
-    const document = await prisma.document.findFirst({
-      where: { id, companyId: user.companyId },
-      include: { departments: true },
-    });
+    const document = await getDocument(id, user.companyId);
     if (!document) throw notFound("Document not found");
     if (
       !canAccessDocument(user, {
@@ -27,7 +24,7 @@ export async function GET(
       throw notFound("Document not found");
     }
     const bytes = await getDocumentStorage().get(document.storagePath);
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes), {
       headers: {
         "Content-Type": document.mimeType,
         "Content-Disposition": `inline; filename="${document.originalFilename.replaceAll('"', "")}"`,
