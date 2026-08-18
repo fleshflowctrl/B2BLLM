@@ -1,14 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -17,22 +16,33 @@ export function LoginForm() {
     event.preventDefault();
     setPending(true);
     setError(null);
-    const form = new FormData(event.currentTarget);
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    );
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
-    });
-    setPending(false);
-    if (signInError) {
-      setError("Invalid email or password.");
-      return;
+    try {
+      const form = new FormData(event.currentTarget);
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+      if (!url || !key) {
+        throw new Error("Supabase environment variables are missing on this deploy.");
+      }
+      const supabase = createBrowserClient(url, key);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: String(form.get("email") ?? "").trim(),
+        password: String(form.get("password") ?? ""),
+      });
+      if (signInError) {
+        throw new Error(signInError.message);
+      }
+      const bootstrap = await fetch("/api/auth/bootstrap", { method: "POST" });
+      const payload = (await bootstrap.json().catch(() => ({}))) as { error?: string };
+      if (!bootstrap.ok) {
+        throw new Error(payload.error || "Signed in, but the user profile could not be created.");
+      }
+      window.location.assign(params.get("callbackUrl") || "/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed.");
+      setPending(false);
     }
-    router.push(params.get("callbackUrl") || "/");
-    router.refresh();
   }
 
   return (
@@ -54,7 +64,13 @@ export function LoginForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" required autoComplete="current-password" />
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+            />
           </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <Button className="w-full" disabled={pending} type="submit">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { createBrowserClient } from "@supabase/ssr";
 import {
   FileText,
   LayoutDashboard,
@@ -105,7 +105,15 @@ export function AppSidebar({
           <Button
             size="icon-sm"
             variant="ghost"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={async () => {
+              const supabase = createBrowserClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+                  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+              );
+              await supabase.auth.signOut();
+              window.location.assign("/login");
+            }}
             aria-label="Sign out"
           >
             <LogOut className="size-4" />
