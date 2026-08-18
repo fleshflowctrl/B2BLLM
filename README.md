@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PrivateAI
 
-## Getting Started
+Self-hosted company knowledge assistant. Employees ask questions against internal documents. Retrieval is filtered by company and department **before** the local LLM sees any context.
 
-First, run the development server:
+> Your company's knowledge. Your infrastructure. Your AI.
+
+## Stack
+
+- Next.js App Router, TypeScript, Tailwind, shadcn/ui
+- PostgreSQL + Prisma
+- Qdrant
+- Ollama (chat + embeddings)
+- Local disk storage for originals
+
+## Quick start (local app + Docker dependencies)
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres qdrant ollama
+npx prisma generate
+npx prisma migrate dev --name init
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Demo logins (password `Password123!`):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Email | Role | Access |
+| --- | --- | --- |
+| `admin@acme.local` | Admin | All company documents |
+| `sales@acme.local` | Employee | Sales + company-wide |
+| `hr@acme.local` | Employee | HR + company-wide |
 
-## Learn More
+Pull models once Ollama is up:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker compose exec ollama ollama pull llama3.1
+docker compose exec ollama ollama pull nomic-embed-text
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then retry processing on `/documents` so embeddings can be generated.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Full Docker
 
-## Deploy on Vercel
+```bash
+docker compose up -d --build
+docker compose exec app npx prisma db seed
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The web app is published on port 3000. Postgres, Qdrant, and Ollama bind to localhost only.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Environment
+
+See `.env.example`. Important variables:
+
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL`
+- `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS`
+- `QDRANT_URL` / `QDRANT_COLLECTION`
+- `STORAGE_PATH` / `MAX_UPLOAD_BYTES`
+
+## Tests
+
+```bash
+npm test
+```
+
+Critical coverage: department ACL, tenant isolation, citation retrieval, and the insufficient-context answer path.

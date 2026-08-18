@@ -1,0 +1,9 @@
+Maintenance Report — Machine 482 — May 2025
+
+Department: Engineering
+
+On 12 May 2025, machine 482 stopped during the afternoon shift.
+
+Root cause: overheating in the hydraulic pump caused a thermal shutdown.
+
+Corrective action: replace the pump cooling line and inspect hydraulic fluid levels weekly.
