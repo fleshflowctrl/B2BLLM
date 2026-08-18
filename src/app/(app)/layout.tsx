@@ -4,6 +4,13 @@ import { requireUserPage } from "@/services/auth/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SetupRequired } from "@/components/setup-required";
 
+function isNextRedirect(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const digest = "digest" in error ? String(error.digest) : "";
+  const message = "message" in error ? String(error.message) : "";
+  return digest.startsWith("NEXT_REDIRECT") || message === "NEXT_REDIRECT";
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let user;
   let conversations;
@@ -11,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     user = await requireUserPage();
     conversations = await listUserConversations(user.companyId, user.id);
   } catch (error) {
+    if (isNextRedirect(error)) throw error;
     const detail = error instanceof Error ? error.message : "Unknown database error";
     return <SetupRequired detail={detail} />;
   }
