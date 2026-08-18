@@ -25,7 +25,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Demo logins (password `Password123!`):
+Demo accounts (set `SEED_PASSWORD` in `.env` before seeding):
 
 | Email | Role | Access |
 | --- | --- | --- |

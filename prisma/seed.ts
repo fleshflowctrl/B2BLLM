@@ -14,7 +14,11 @@ const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const passwordHash = await hashPassword("Password123!");
+  const seedPassword = process.env.SEED_PASSWORD;
+  if (!seedPassword) {
+    throw new Error("Set SEED_PASSWORD in your environment before seeding.");
+  }
+  const passwordHash = await hashPassword(seedPassword);
   const company = await prisma.company.upsert({
     where: { slug: "acme-manufacturing" },
     update: {},
@@ -148,9 +152,9 @@ async function main() {
   }
 
   console.log("Seed complete.");
-  console.log("  admin@acme.local / Password123!");
-  console.log("  sales@acme.local / Password123!");
-  console.log("  hr@acme.local / Password123!");
+  console.log("  admin@acme.local");
+  console.log("  sales@acme.local");
+  console.log("  hr@acme.local");
 }
 
 main()
