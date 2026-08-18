@@ -1,62 +1,56 @@
-import NextAuth from "next-auth";
-import { NextResponse } from "next/server";
-import { authConfig } from "@/auth.config";
-import { createClient } from "@/utils/supabase/middleware";
-
-const { auth } = NextAuth(authConfig);
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 function isAuthDisabled() {
-  const value = process.env.AUTH_DISABLED ?? "true";
-  return value !== "false" && value !== "0";
+  const value = process.env.AUTH_DISABLED ?? "false";
+  return value === "true" || value === "1";
 }
 
-export default auth(async (req) => {
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-    const { supabase, supabaseResponse } = createClient(req);
-    await supabase.auth.getUser();
+export async function proxy(request: NextRequest) {
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
+  let response = NextResponse.next({ request });
+  if (!url || !key) return response;
 
-    if (isAuthDisabled()) {
-      if (req.nextUrl.pathname.startsWith("/login")) {
-        const redirect = NextResponse.redirect(new URL("/", req.nextUrl));
-        supabaseResponse.cookies.getAll().forEach((cookie) => {
-          redirect.cookies.set(cookie.name, cookie.value);
-        });
-        return redirect;
-      }
-      return supabaseResponse;
-    }
-  }
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+      },
+    },
+  });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
+  const pathname = request.nextUrl.pathname;
   if (isAuthDisabled()) {
-    if (req.nextUrl.pathname.startsWith("/login")) {
-      return Response.redirect(new URL("/", req.nextUrl));
+    if (pathname.startsWith("/login")) {
+      return NextResponse.redirect(new URL("/", request.url));
     }
-    return;
+    return response;
   }
-
-  const { pathname } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
-  const isAuthRoute = pathname.startsWith("/login");
-  const isAuthApi = pathname.startsWith("/api/auth");
-
-  if (isAuthApi) return;
-
-  if (isAuthRoute) {
-    if (isLoggedIn) {
-      return Response.redirect(new URL("/", req.nextUrl));
-    }
-    return;
+  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+    return response;
   }
-
-  if (!isLoggedIn) {
+  if (!user) {
     if (pathname.startsWith("/api/")) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const loginUrl = new URL("/login", req.nextUrl);
+    const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
-    return Response.redirect(loginUrl);
+    return NextResponse.redirect(loginUrl);
   }
-});
+  return response;
+}
+
+export default proxy;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],

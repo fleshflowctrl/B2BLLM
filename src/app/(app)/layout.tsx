@@ -1,5 +1,5 @@
 import { isAuthDisabled } from "@/lib/env";
-import { listConversations } from "@/lib/db";
+import { listUserConversations } from "@/lib/repo";
 import { requireUserPage } from "@/services/auth/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SetupRequired } from "@/components/setup-required";
@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let conversations;
   try {
     user = await requireUserPage();
-    conversations = await listConversations(user.companyId, user.id);
+    conversations = await listUserConversations(user.companyId, user.id);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown database error";
     return <SetupRequired detail={detail} />;
@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         companyName={user.companyName}
         userName={user.name}
         role={user.role}
-        conversations={conversations}
+        conversations={conversations.map((item) => ({ id: item.id, title: item.title }))}
         hideSignOut={isAuthDisabled()}
       />
       <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
