@@ -23,11 +23,13 @@ export function AppSidebar({
   userName,
   role,
   conversations,
+  hideSignOut = false,
 }: {
   companyName: string;
   userName: string;
   role: "ADMIN" | "EMPLOYEE";
   conversations: Conversation[];
+  hideSignOut?: boolean;
 }) {
   const pathname = usePathname();
   const admin = role === "ADMIN";
@@ -99,14 +101,16 @@ export function AppSidebar({
           <p className="truncate text-sm font-medium">{userName}</p>
           <p className="text-xs text-zinc-500">{admin ? "Admin" : "Employee"}</p>
         </div>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          aria-label="Sign out"
-        >
-          <LogOut className="size-4" />
-        </Button>
+        {hideSignOut ? null : (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            aria-label="Sign out"
+          >
+            <LogOut className="size-4" />
+          </Button>
+        )}
       </div>
     </aside>
   );

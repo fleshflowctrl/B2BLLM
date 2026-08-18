@@ -15,6 +15,11 @@ const envSchema = z.object({
   QDRANT_COLLECTION: z.string().default("privateai_chunks"),
   STORAGE_PATH: z.string().default("./data/storage"),
   MAX_UPLOAD_BYTES: z.coerce.number().default(25 * 1024 * 1024),
+  // Temporary: leave unset/true so anyone can use the app without signing in.
+  AUTH_DISABLED: z
+    .enum(["true", "false", "1", "0"])
+    .optional()
+    .default("true"),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -36,6 +41,12 @@ export function getEnv(): AppEnv {
     QDRANT_COLLECTION: process.env.QDRANT_COLLECTION,
     STORAGE_PATH: process.env.STORAGE_PATH,
     MAX_UPLOAD_BYTES: process.env.MAX_UPLOAD_BYTES,
+    AUTH_DISABLED: process.env.AUTH_DISABLED as "true" | "false" | "1" | "0" | undefined,
   });
   return cached;
+}
+
+export function isAuthDisabled() {
+  const value = process.env.AUTH_DISABLED ?? "true";
+  return value !== "false" && value !== "0";
 }

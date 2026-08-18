@@ -3,7 +3,19 @@ import { authConfig } from "@/auth.config";
 
 const { auth } = NextAuth(authConfig);
 
+function isAuthDisabled() {
+  const value = process.env.AUTH_DISABLED ?? "true";
+  return value !== "false" && value !== "0";
+}
+
 export default auth((req) => {
+  if (isAuthDisabled()) {
+    if (req.nextUrl.pathname.startsWith("/login")) {
+      return Response.redirect(new URL("/", req.nextUrl));
+    }
+    return;
+  }
+
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
   const isAuthRoute = pathname.startsWith("/login");
